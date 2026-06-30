@@ -1,0 +1,52 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ] # Spustí se při pushi do hlavní větve
+  workflow_dispatch: # Umožní spustit build ručně přes web GitHubu
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repozitáře
+        uses: actions/checkout@v4
+
+      - name: Nastavení Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      # DŮLEŽITÉ: Pokud máte složku s projektem v podadresáři, 
+      # přidejte pod řádek "run:" příkaz "cd vase_složka" (např. cd android)
+      - name: Přidání spustitelných práv pro gradlew
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          else
+            echo "Soubor gradlew nebyl nalezen v kořenovém adresáři!"
+            # Pokud je gradlew např. ve složce android/, odmažte mřížku na řádku níže:
+            # chmod +x ./android/gradlew
+          fi
+
+      # Sestavení Debug APK (pro testování, nevyžaduje podpisový klíč)
+      - name: Sestavení APK pomocí Gradle
+        run: |
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug
+          else
+            # Pokud je v podsložce, použijte správnou cestu:
+            ./android/gradlew assembleDebug -p android
+          fi
+
+      # Nahrání výsledného .apk souboru do záložky Artifacts na GitHubu
+      - name: Nahrání hotového APK mezi artefakty
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModAi-Debug-APK
+          path: |
+            **/build/outputs/apk/debug/*.apk
+            
