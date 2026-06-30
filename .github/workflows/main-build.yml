@@ -1,0 +1,296 @@
+name: Build AutoMod AI APK
+
+on:
+  push:
+    branches: [ "main", "develop", "feature/**" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:          # Ruční spuštění
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - debug
+          - release
+      android_abi:
+        description: 'Target ABI'
+        required: true
+        default: 'arm64-v8a'
+        type: choice
+        options:
+          - arm64-v8a
+          - all
+
+# Environment variables
+env:
+  ANDROID_SDK_VERSION: '8512546'    # SDK 35
+  ANDROID_BUILD_TOOLS: '35.0.0'
+  ANDROID_NDK_VERSION: '27.2.12479018'
+  GRADLE_VERSION: '8.9'
+  JAVA_VERSION: '21'
+
+jobs:
+  # === JOB 1: VALIDACE ===
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      apk_exists: ${{ steps.check_apk.outputs.exists }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+      
+      - name: Validate project structure
+        run: |
+          echo "=== Validating project structure ==="
+          REQUIRED_FILES=(
+            "build.gradle.kts"
+            "settings.gradle.kts"
+            "gradle.properties"
+            "app/build.gradle.kts"
+            "app/src/main/AndroidManifest.xml"
+          )
+          for file in "${REQUIRED_FILES[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✓ $file"
+            else
+              echo "✗ $file - MISSING!"
+              exit 1
+            fi
+          done
+          echo "All required files present ✓"
+
+      - name: Check for gradle wrapper
+        run: |
+          if [ -f "gradlew" ]; then
+            echo "✓ gradlew exists"
+          else
+            echo "✗ gradlew missing - generating..."
+            gradle wrapper --gradle-version ${{ env.GRADLE_VERSION }}
+          fi
+
+  # === JOB 2: BUILD ===
+  build:
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      matrix:
+        build-type: [debug, release]
+      fail-fast: false
+    
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      # === SETUP JAVA ===
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+      
+      # === SETUP ANDROID SDK ===
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '11076708'
+          packages: >-
+            platform-tools
+            platforms;android-35
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+            ndk;${{ env.ANDROID_NDK_VERSION }}
+            cmake;3.31.0
+            patcher;v4
+      
+      - name: Setup Android environment
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${{ env.ANDROID_NDK_VERSION }}" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          
+          # Verify
+          echo "=== Android SDK ==="
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "NDK version: $(ls $ANDROID_HOME/ndk/ 2>/dev/null || echo 'NOT FOUND')"
+          echo "Build tools: $(ls $ANDROID_HOME/build-tools/ 2>/dev/null || echo 'NOT FOUND')"
+          echo "Platforms: $(ls $ANDROID_HOME/platforms/ 2>/dev/null || echo 'NOT FOUND')"
+      
+      # === CACHE ===
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+      
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_HOME }}
+          key: ${{ runner.os }}-android-sdk-${{ env.ANDROID_SDK_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-android-sdk-
+      
+      - name: Cache NDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ANDROID_NDK_HOME }}
+          key: ${{ runner.os }}-ndk-${{ env.ANDROID_NDK_VERSION }}
+      
+      # === BUILD ===
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      
+      - name: Build APK (${{ matrix.build-type }})
+        run: |
+          echo "=== Building ${{ matrix.build-type }} APK ==="
+          
+          # Build with specific ABI
+          ./gradlew clean \
+            assemble${{ matrix.build-type == 'release' && 'Release' || 'Debug' }} \
+            -DtargetAbi=${{ inputs.android_abi || 'arm64-v8a' }} \
+            -Dorg.gradle.parallel=true \
+            -Dorg.gradle.daemon=false \
+            --no-daemon \
+            --stacktrace \
+            --info
+          
+          # Check if build succeeded
+          if [ $? -eq 0 ]; then
+            echo "✓ Build successful"
+          else
+            echo "✗ Build failed"
+            exit 1
+          fi
+      
+      # === VERIFY APK ===
+      - name: Verify APK artifacts
+        run: |
+          echo "=== Checking APK artifacts ==="
+          APK_DIR="app/build/outputs/apk/${{ matrix.build-type }}"
+          
+          if [ -d "$APK_DIR" ]; then
+            echo "APK directory: $APK_DIR"
+            ls -la "$APK_DIR/"
+            
+            for apk in "$APK_DIR"/*.apk; do
+              if [ -f "$apk" ]; then
+                echo "Found: $apk"
+                echo "Size: $(du -h "$apk" | cut -f1)"
+                
+                # Verify APK structure
+                python3 -c "
+import zipfile
+apk = zipfile.ZipFile('$apk')
+print('APK contents:')
+for info in apk.infolist():
+    print(f'  {info.filename} ({info.file_size} bytes)')
+apk.close()
+"
+              fi
+            done
+          else
+            echo "No APK found!"
+            exit 1
+          fi
+      
+      # === UPLOAD ARTIFACTS ===
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoModAI-${{ matrix.build-type }}-${{ github.sha }}
+          path: app/build/outputs/apk/${{ matrix.build-type }}/*.apk
+          retention-days: 30
+          if-no-files-found: error
+          compression-level: 9
+      
+      - name: Upload mapping files (release only)
+        if: matrix.build-type == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoModAI-release-mapping-${{ github.sha }}
+          path: |
+            app/build/outputs/mapping/**/*
+            app/build/outputs/native-debug-symbols/**/*
+          retention-days: 90
+
+  # === JOB 3: ANALÝZA APK ===
+  analyze:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: AutoModAI-release-${{ github.sha }}
+          path: ./apk
+      
+      - name: Analyze APK
+        run: |
+          echo "=== APK Analysis ==="
+          APK_FILE=$(ls ./apk/*.apk | head -1)
+          echo "File: $APK_FILE"
+          echo "Size: $(du -h "$APK_FILE" | cut -f1)"
+          
+          # Analyze with aapt2
+          $ANDROID_HOME/build-tools/${{ env.ANDROID_BUILD_TOOLS }}/aapt2 dump badging "$APK_FILE" || true
+          
+          # Check for native libs
+          python3 -c "
+import zipfile
+apk = zipfile.ZipFile('$APK_FILE')
+libs = [f for f in apk.namelist() if f.startswith('lib/')]
+print(f'Native libraries found: {len(libs)}')
+for lib in libs:
+    print(f'  {lib} ({apk.getinfo(lib).file_size} bytes)')
+apk.close()
+"
+      
+      - name: Upload analysis report
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoModAI-analysis-report-${{ github.sha }}
+          path: ./apk/*.txt
+          retention-days: 7
+
+  # === JOB 4: NOTIFIKACE ===
+  notify:
+    runs-on: ubuntu-latest
+    needs: [build, analyze]
+    if: always()
+    
+    steps:
+      - name: Notify status
+        run: |
+          if [ "${{ needs.build.result }}" == "success" ] && [ "${{ needs.analyze.result }}" == "success" ]; then
+            echo "✓ All builds passed successfully"
+            echo "APK ready for download"
+          else
+            echo "✗ Some builds failed"
+            echo "Failed jobs:"
+            echo "  Build: ${{ needs.build.result }}"
+            echo "  Analyze: ${{ needs.analyze.result }}"
+            exit 1
+          fi
