@@ -1,0 +1,86 @@
+name: Android CI - Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      buildVariant:
+        description: 'Gradle task to run (e.g. assembleDebug or assembleRelease)'
+        required: false
+        default: 'assembleDebug'
+      uploadRelease:
+        description: 'If true, create a GitHub Release (draft) and upload the APK as an asset'
+        required: false
+        default: 'false'
+      releaseTag:
+        description: 'Tag name to use for the release (optional). If empty, commit SHA will be used.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build APK
+        run: ./gradlew ${{ github.event.inputs.buildVariant }} --no-daemon --stacktrace
+
+      - name: Collect APKs
+        run: |
+          mkdir -p output
+          find . -type f -path "*/build/outputs/apk/*/*.apk" -print -exec cp {} output/ \;
+          ls -la output || true
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-apks
+          path: output/*.apk
+
+      - name: Create GitHub Release (draft)
+        if: ${{ github.event.inputs.uploadRelease == 'true' }}
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.releaseTag || github.sha }}
+          release_name: Release ${{ github.event.inputs.releaseTag || github.sha }}
+          draft: true
+          prerelease: false
+
+      - name: Upload APK to Release
+        if: ${{ github.event.inputs.uploadRelease == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: output/*.apk
+          asset_name: app.apk
+          asset_content_type: application/vnd.android.package-archive
