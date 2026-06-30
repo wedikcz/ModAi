@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AutoMod AI</string>
+    <string name="app_full_name">AutoMod Adaptive Metacognitive AI</string>
+    <string name="app_version">1.0.0</string>
+    <string name="app_description">Plně autonomní AI nástroj pro reverzní inženýrství a modding Android aplikací</string>
+    
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_analyze">Analyze</string>
+    <string name="nav_build">Build</string>
+    <string name="nav_settings">Settings</string>
+    
+    <!-- Status -->
+    <string name="status_ready">Ready</string>
+    <string name="status_analyzing">Analyzing</string>
+    <string name="status_building">Building</string>
+    <string name="status_error">Error</string>
+    <string name="status_completed">Completed</string>
+    
+    <!-- Actions -->
+    <string name="action_auto_analyze">AUTO ANALYZE</string>
+    <string name="action_browse">BROWSE</string>
+    <string name="action_build_mod">BUILD MOD APK</string>
+    <string name="action_start">START</string>
+    <string name="action_stop">STOP</string>
+    <string name="action_cancel">CANCEL</string>
+    <string name="action_save">SAVE</string>
+    <string name="action_export">EXPORT</string>
+    
+    <!-- Mod options -->
+    <string name="option_remove_licenses">Remove License Checks</string>
+    <string name="option_bypass_server">Bypass Server Validation</string>
+    <string name="option_remove_ads">Remove Ads</string>
+    <string name="option_unlock_premium">Unlock Premium Features</string>
+    <string name="option_add_hack_menu">Enable Hack Menu</string>
+    
+    <!-- Hack features -->
+    <string name="hack_god_mode">God Mode</string>
+    <string name="hack_one_hit_kill">One Hit Kill</string>
+    <string name="hack_aimbot">Aimbot</string>
+    <string name="hack_wallhack">Wallhack</string>
+    <string name="hack_xray">X-Ray Vision</string>
+    <string name="hack_speed">Speed Hack</string>
+    <string name="hack_money">Money/Currency Hack</string>
+    <string name="hack_xp_multiplier">XP Multiplier</string>
+    <string name="hack_infinite_ammo">Infinite Ammo</string>
+    <string name="hack_no_reload">No Reload</string>
+    
+    <!-- Notifications -->
+    <string name="channel_name">AutoMod Analysis</string>
+    <string name="channel_description">Background APK analysis service</string>
+    <string name="notification_analyzing">Analyzing %1$s…</string>
+    <string name="notification_building">Building mod for %1$s…</string>
+    <string name="notification_complete">Analysis complete: %1$s</string>
+    <string name="notification_error">Error: %1$s</string>
+    
+    <!-- Errors -->
+    <string name="error_no_root">Root access required but not available</string>
+    <string name="error_no_frida">Frida server not running</string>
+    <string name="error_apk_invalid">Invalid or corrupted APK file</string>
+    <string name="error_sign_failed">APK signing failed</string>
+    <string name="error_no_space">Insufficient storage space</string>
+    <string name="error_permission">Required permission not granted</string>
+    <string name="error_generic">An error occurred: %1$s</string>
+    
+    <!-- System status -->
+    <string name="sys_status">SYSTEM STATUS</string>
+    <string name="sys_ai_engine">AI Engine</string>
+    <string name="sys_r2frida">R2Frida</string>
+    <string name="sys_r2ghidra">R2Ghidra</string>
+    <string name="sys_apktool">APKTool</string>
+    <string name="sys_signer">APK Signer</string>
+    <string name="sys_root">Root Access</string>
+    <string name="sys_active">ACTIVE</string>
+    <string name="sys_connected">CONNECTED</string>
+    <string name="sys_ready">READY</string>
+    <string name="sys_installed">INSTALLED</string>
+    <string name="sys_granted">GRANTED</string>
+    
+    <!-- Tutorial -->
+    <string name="tutorial_welcome">Welcome to AutoMod AI</string>
+    <string name="tutorial_desc">The most advanced autonomous Android modding tool</string>
+    <string name="tutorial_step1">Grant overlay permission to use the hack menu</string>
+    <string name="tutorial_step2">Select an app or APK file to analyze</string>
+    <string name="tutorial_step3">Choose modifications and build your mod</string>
+    <string name="tutorial_step4">Install the modded APK and enjoy!</string>
+    <string name="tutorial_get_started">GET STARTED</string>
+    <string name="tutorial_skip">SKIP</string>
+</resources>

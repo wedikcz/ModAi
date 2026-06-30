@@ -1,0 +1,35 @@
+[versions]
+agp = "8.7.0"
+kotlin = "2.1.0"
+ksp = "2.1.0-1.0.29"
+compose-bom = "2024.12.01"
+compose-compiler = "1.5.15"
+lifecycle = "2.8.7"
+navigation = "2.8.5"
+coroutines = "1.9.0"
+serialization = "1.7.3"
+koin = "4.0.0"
+okhttp = "4.12.0"
+retrofit = "2.11.0"
+room = "2.6.1"
+bouncycastle = "1.79"
+timber = "5.0.1"
+
+[libraries]
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.15.0" }
+androidx-lifecycle = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version = "1.9.3" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
