@@ -1,0 +1,208 @@
+name: Build Release APK (Full)
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
+
+env:
+  JAVA_VERSION: '21'
+  GRADLE_VERSION: '8.9'
+  ANDROID_BUILD_TOOLS: '35.0.0'
+  ANDROID_NDK_VERSION: '27.2.12479018'
+  KEYSTORE_ALIAS: 'automod-key'
+  KEYSTORE_PASSWORD: 'AutoMod@2026!'
+  KEY_PASSWORD: 'AutoMod@2026!'
+
+jobs:
+  # Job 1: Setup - Vytvoření keystore
+  setup-keystore:
+    runs-on: ubuntu-latest
+    outputs:
+      keystore-exists: ${{ steps.check-keystore.outputs.exists }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Check if keystore exists
+        id: check-keystore
+        run: |
+          if [ -f "keystore.jks" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✓ Keystore už existuje"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "ℹ Keystore bude vytvořen"
+          fi
+      
+      - name: Generate keystore (if not exists)
+        if: steps.check-keystore.outputs.exists == 'false'
+        run: |
+          keytool -genkey -v -keystore keystore.jks \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -alias ${{ env.KEYSTORE_ALIAS }} \
+            -storepass ${{ env.KEYSTORE_PASSWORD }} \
+            -keypass ${{ env.KEY_PASSWORD }} \
+            -dname "CN=AutoMod, O=AutoMod AI, L=Prague, ST=Prague, C=CZ"
+          
+          echo "✓ Keystore vytvořen: keystore.jks"
+          ls -lh keystore.jks
+      
+      - name: Encode keystore to base64
+        id: encode-keystore
+        run: |
+          if [ -f "keystore.jks" ]; then
+            KEYSTORE_B64=$(base64 -w 0 < keystore.jks)
+            echo "keystore_b64=$KEYSTORE_B64" >> $GITHUB_OUTPUT
+            echo "✓ Keystore zakódován"
+          fi
+      
+      - name: Upload keystore as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keystore
+          path: keystore.jks
+          retention-days: 90
+
+  # Job 2: Build Release APK
+  build-release:
+    runs-on: ubuntu-latest
+    needs: setup-keystore
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+      
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '11076708'
+          packages: >-
+            platform-tools
+            platforms;android-35
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+            ndk;${{ env.ANDROID_NDK_VERSION }}
+            cmake;3.31.0
+      
+      - name: Download keystore
+        uses: actions/download-artifact@v4
+        with:
+          name: keystore
+      
+      - name: Grant execute permission
+        run: chmod +x gradlew
+      
+      - name: Build Release APK
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$(pwd)/keystore.jks \
+            -Pandroid.injected.signing.store.password=${{ env.KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ env.KEYSTORE_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ env.KEY_PASSWORD }} \
+            --stacktrace
+      
+      - name: Verify build output
+        run: |
+          if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+            echo "✓ Release APK vytvořen!"
+            ls -lh app/build/outputs/apk/release/app-release.apk
+          else
+            echo "✗ Chyba: APK se nevytvořilo"
+            exit 1
+          fi
+      
+      - name: Get APK info
+        run: |
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
+          APK_SIZE=$(du -h "$APK_PATH" | cut -f1)
+          echo "APK Size: $APK_SIZE"
+          
+          # Podpis verifikace
+          jarsigner -verify -verbose -certs "$APK_PATH" 2>&1 | head -20
+      
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+      
+      - name: Build Summary
+        run: |
+          echo "════════════════════════════════"
+          echo "✓ BUILD COMPLETED SUCCESSFULLY"
+          echo "════════════════════════════════"
+          echo "Build Type: Release (Optimized)"
+          echo "APK Name: app-release.apk"
+          echo "Java Version: ${{ env.JAVA_VERSION }}"
+          echo "Android SDK: 35"
+          echo "Build Tools: ${{ env.ANDROID_BUILD_TOOLS }}"
+          echo "Signing: Enabled (keystore.jks)"
+          echo "ProGuard: Enabled"
+          echo "Compression: Enabled"
+          echo "════════════════════════════════"
+          echo "📥 Artifacts: app-release.apk"
+          echo "════════════════════════════════"
+
+  # Job 3: Release (GitHub Release)
+  create-release:
+    runs-on: ubuntu-latest
+    needs: build-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download APK
+        uses: actions/download-artifact@v4
+        with:
+          name: app-release
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: app-release.apk
+          draft: false
+          prerelease: false
+          body: |
+            # AutoMod AI Release
+            
+            ## Build Info
+            - **Version**: ${{ github.ref_name }}
+            - **Build Date**: ${{ github.event.head_commit.timestamp }}
+            - **Commit**: ${{ github.sha }}
+            
+            ## Features
+            - ✓ Fully optimized Release APK
+            - ✓ ProGuard obfuscation enabled
+            - ✓ Digitally signed
+            - ✓ Ready for distribution
+            
+            ## Installation
+            ```bash
+            adb install app-release.apk
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
