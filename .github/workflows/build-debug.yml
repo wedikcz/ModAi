@@ -1,0 +1,85 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:  # Ruční spuštění
+
+env:
+  JAVA_VERSION: '21'
+  GRADLE_VERSION: '8.9'
+  ANDROID_BUILD_TOOLS: '35.0.0'
+  ANDROID_NDK_VERSION: '27.2.12479018'
+
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Checkout kódu
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          lfs: true
+      
+      # 2. Setup Java
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+      
+      # 3. Setup Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '11076708'
+          packages: >-
+            platform-tools
+            platforms;android-35
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+            ndk;${{ env.ANDROID_NDK_VERSION }}
+            cmake;3.31.0
+      
+      # 4. Dej práva gradlew
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      
+      # 5. Build Debug APK
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --stacktrace
+      
+      # 6. Zkontroluj výsledek
+      - name: Check build output
+        run: |
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "✓ APK vytvořen úspěšně!"
+            ls -lh app/build/outputs/apk/debug/app-debug.apk
+          else
+            echo "✗ APK se nepodařilo vytvořit"
+            exit 1
+          fi
+      
+      # 7. Upload APK jako artifact
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+      
+      # 8. Zobraz build info
+      - name: Build Info
+        run: |
+          echo "================================"
+          echo "✓ BUILD COMPLETED SUCCESSFULLY"
+          echo "================================"
+          echo "APK Name: app-debug.apk"
+          echo "Build Type: Debug"
+          echo "Java: ${{ env.JAVA_VERSION }}"
+          echo "Android Build Tools: ${{ env.ANDROID_BUILD_TOOLS }}"
+          echo "================================"
